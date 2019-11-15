@@ -17,34 +17,37 @@ full_data <- left_join(tidy_visits, np, by=c('Park' = 'Name'))
 ui_1 <- fluidPage(
   theme = shinytheme("darkly"),
   fluidRow(
-    column(
-      5,
-      selectInput(
-        "park", "Select a park:",
-        np$Name
-      )
-    ),
-    column(
-      3,
-      verbatimTextOutput("description")
-    ),
-    column(
-      4,
+    selectInput(
+      "park", "Select a park:",
+      np$Name
     )
   ),
   fluidRow(
     column(
-      4,
-      
+      5,
+      box(leafletOutput("parkMap"), width = 12),
     ),
     column(
       4,
-      plotOutput("monthPlot")
+      h1("{Park Name}"),
+      textOutput("description")
     ),
     column(
-      4,
-      plotOutput("yearPlot")
+      3,
+      valueBox(
+        uiOutput("parkDate"), "Date Stablish", icon = icon("fas fa-calendar-alt"), width = 12
+      ),
+      valueBox(
+        uiOutput("parkArea"), "Total Area", icon = icon("fas fa-globe-americas"), width = 12
+      ),
+      valueBox(
+        uiOutput("parkStates"), "State(s)", icon = icon("fas fa-map-marked-alt"), width = 12
+      ),
     )
+  ),
+  fluidRow(
+    box(plotOutput("monthPlot"), width = 4),
+    box(plotOutput("yearPlot"), width = 4)
   )
 )
 
@@ -75,24 +78,12 @@ ui_0 <- fluidPage(
   #               max = 2017, value = c(1979, 2017))
   # ),
   fluidRow(
-    column(
-      6,
-      leafletOutput("mymap")
-      ),
-    column(
-      6,
-      plotOutput("visitsTrend")
-    )
+    box(leafletOutput("mymap")),
+    box(plotOutput("visitsTrend"))
   ),
   fluidRow(
-    column(
-      6,
-      plotOutput("rankingStates")
-    ),
-    column(
-      6,
-      plotOutput("rankingVisits")
-    )
+    box(plotOutput("rankingStates")),
+    box(plotOutput("rankingVisits"))
   )
 )
 
@@ -189,10 +180,32 @@ server <- function(input, output) {
   
   ## -------------------------------------------- Server By Park --------------------------------##
   
+  
   output$description <- renderText({ 
     x <- np %>%
       filter(Name == input$park) %>%
       .$Description
+    toString(x)
+  })
+  
+  output$parkDate <- renderText({ 
+    x1 <- np %>%
+      filter(Name == input$park) %>%
+      .$Date
+    toString(x1)
+  })
+  output$parkArea <- renderText({ 
+    x2 <- np %>%
+      filter(Name == input$park) %>%
+      .$`Area (acres)`
+    x2 <- 'x,xxx.xx' 
+    # format(x2/1000, nsmall=1, digits = 1, big.mark=",")
+  })
+  output$parkStates <- renderText({ 
+    x3 <- np %>%
+      filter(Name == input$park) %>%
+      .$State
+    toString(x3)
   })
   
   output$monthPlot <- renderPlot({
@@ -216,12 +229,15 @@ server <- function(input, output) {
       geom_line(size = 0.5)
   })
   
-  output$usParkMap <- renderPlot({
-    usa <- map_data("usa")
-    ggplot() +
-      geom_polygon(data = usa, aes(x = long, y = lat, group = group)) +
-      coord_fixed(1.3) +
-      geom_point(data = np, aes(x = Long, y = Lat), color = "yellow", size = 4)
+  output$parkMap <- renderLeaflet({
+    map_data <- np %>%
+      filter(Name == input$park)
+      
+    leaflet(map_data) %>%
+      addTiles() %>%
+      addMarkers(lng = ~Long, 
+                 lat = ~Lat, 
+                 popup = ~Name)
   })
   
   ## --------------------------------------------------------------------------------------------##
