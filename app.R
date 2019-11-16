@@ -29,7 +29,7 @@ ui_1 <- fluidPage(
     ),
     column(
       4,
-      h1("{Park Name}"),
+      uiOutput("header"),
       textOutput("description")
     ),
     column(
@@ -187,6 +187,10 @@ server <- function(input, output) {
       .$Description
     toString(x)
   })
+  
+  output$header <- renderUI(
+    h1(input$park)
+  )
   
   output$parkDate <- renderText({ 
     x1 <- np %>%
