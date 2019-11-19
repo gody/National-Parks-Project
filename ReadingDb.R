@@ -43,20 +43,31 @@ np <- subset(np_test, select = -c(X, Y))
 
 colnames(np)[colnames(np)=="Date.established.as.park.5..9."] <- "Date"
 colnames(np)[colnames(np)=="Area..2018..10."] <- "Area"
-np_test <- np %>%
+np <- np %>%
   separate(col = "Area" , into = c("Area (acres)", "Area (kms)"), sep = " acres \\(") %>%
-  mutate(`Area (acres)` = as.numeric(`Area (acres)`))
-
-np_test$`Area (acres)`
+  mutate(Area = as.numeric(str_remove_all(`Area (acres)`,",")))
 
 write_rds(tidy_visits, path = 'data/NP Visits.rds')
 write_rds(np, path = 'data/NP General Information.rds')
 
-###### WORK IN PROGRESS
+#####
 
-library(rgdal)
-states <- readOGR("National_Park_Service__Park_Unit_Boundaries/National_Park_Service__Park_Unit_Boundaries.shp",
-                  layer = "National_Park_Service__Park_Unit_Boundaries", GDAL1_integer64_policy = TRUE)
-library(maptools)
-crswgs84=CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
-parks <- readShapePoly("National_Park_Service__Park_Unit_Boundaries/National_Park_Service__Park_Unit_Boundaries.shp",proj4string=crswgs84,verbose=TRUE)
+library(usmap)
+library(ggplot2)
+
+test <- np %>%
+  group_by(state) %>%
+  summarize(parks = n())
+
+state_data <- data.frame(fips = c("01", "02", "04"), parks = c(1, 5, 8))
+df <- map_with_data(test, na = 0)
+
+
+plot_usmap("states",
+  data = test, values = "parks", color = "dark green"
+) + 
+  scale_fill_continuous(
+    low = "green", high = "dark green", name = "Number of Parks", label = scales::comma
+  ) + 
+  labs(title = "Amount of National Parks per State") +
+  theme(legend.position = "right")

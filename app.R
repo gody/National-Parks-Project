@@ -7,12 +7,30 @@ library(gganimate)
 library(shinythemes)
 library(shinydashboard)
 library(shinyWidgets)
+library(raster)
+library(usmap)
 
 tidy_visits <- readRDS('data/NP Visits.rds')
 np <- readRDS('data/NP General Information.rds')
 
 
 full_data <- left_join(tidy_visits, np, by=c('Park' = 'Name'))
+
+ui_2 <- fluidPage(
+  fluidRow(
+    column(
+      8,
+      box(plotOutput("chorophlets"), width = 12)
+    ),
+    column(
+      4,
+      radioButtons("radio", h3("Choroplet Options"),
+                   choices = list("Amount of Parks" = 1, 
+                                  "Total Area" = 2,
+                                  "Visits" = 3), selected = 1)
+    )
+  )
+)
   
 ui_1 <- fluidPage(
   theme = shinytheme("darkly"),
@@ -94,7 +112,7 @@ ui <- navbarPage(
   tabPanel("By Park", ui_1),
   navbarMenu(
     "More",
-    tabPanel("Sub-Component A"),
+    tabPanel("Sub-Component A", ui_2),
     tabPanel("Sub-Component B")
   )
 )
@@ -111,7 +129,7 @@ server <- function(input, output) {
     format(sum(tidy_visits$Visits, na.rm = TRUE)/1000000, nsmall=1, digits = 1, big.mark=",")
   })
   output$total_areas <- renderText({ 
-    format(sum(np$`Area (acres)`, na.rm = TRUE), nsmall=1, digits = 1, big.mark=",")
+    format(sum(np$Area, na.rm = TRUE), nsmall=1, digits = 1, big.mark=",")
   })
   output$newest <- renderText({ 
     "Acadia"
@@ -201,9 +219,8 @@ server <- function(input, output) {
   output$parkArea <- renderText({ 
     x2 <- np %>%
       filter(Name == input$park) %>%
-      .$`Area (acres)`
-    x2 <- 'x,xxx.xx' 
-    # format(x2/1000, nsmall=1, digits = 1, big.mark=",")
+      .$Area
+    format(x2/1000, nsmall=1, digits = 1, big.mark=",")
   })
   output$parkStates <- renderText({ 
     x3 <- np %>%
@@ -245,37 +262,24 @@ server <- function(input, output) {
   })
   
   ## --------------------------------------------------------------------------------------------##
-  
-  
 
-  ## ------- MAP EXAMPLE LEAFLET---------- ##
+  output$chorophlets <- renderPlot({
+    #selected <- switch(input$radio,"parks", "area", "visits")
+    
+    test <- np %>%
+      group_by(state) %>%
+      summarize(parks = n())
+    
+    plot_usmap("states",
+               data = test, values = "parks", color = "dark green"
+    ) + 
+      scale_fill_continuous(
+        low = "green", high = "dark green", name = "Number of Parks", label = scales::comma
+      ) + 
+      labs(title = "Amount of National Parks per State") +
+      theme(legend.position = "right")
+  })
   
-  # output$year_range <- renderPrint({ input$slider2 })
-  
-  
-  
-  
-  
-  # output$animation <- renderImage({
-  #   # A temp file to save the output.
-  #   # This file will be removed later by renderImage
-  #   outfile <- tempfile(fileext='.gif')
-  #   
-  #   # now make the animation
-  #   p <- tidy_visits %>%
-  #     group_by(Park, Year) %>%
-  #     summarise(total.visits = sum(Visits)) %>%
-  #     ggplot(aes(x = fct_reorder(Park, total.visits), total.visits, fill = Park)) +
-  #     geom_bar(stat='identity',show.legend = FALSE) +
-  #     coord_flip() +
-  #     # Here comes the gganimate specific bits
-  #     labs(title = 'Year: {closest_state}', x = 'Park', y = 'Year Visits') +
-  #     transition_states(Year, transition_length = 1, state_length = 1) +
-  #     ease_aes('linear')
-  #   animate(p, fps=10)
-  #   
-  #   anim_save("outfile.gif", animate(p)) # New
-  # })
 }
 
 shinyApp(ui, server)
