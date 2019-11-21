@@ -9,9 +9,12 @@ library(shinydashboard)
 library(shinyWidgets)
 library(raster)
 library(usmap)
+library(treemap)
+library(d3treeR)
 
 tidy_visits <- readRDS('data/NP Visits.rds')
 np <- readRDS('data/NP General Information.rds')
+species <- read_csv('data/species.csv')
 
 
 full_data <- left_join(tidy_visits, np, by=c('Park' = 'Name'))
@@ -33,20 +36,21 @@ ui_2 <- fluidPage(
 )
   
 ui_1 <- fluidPage(
-  theme = shinytheme("darkly"),
-  fluidRow(
-    selectInput(
-      "park", "Select a park:",
-      np$Name
-    )
-  ),
+  theme = shinytheme("cerulean"),
+  includeCSS("styles.css"),
+
   fluidRow(
     column(
       5,
-      box(leafletOutput("parkMap"), width = 12),
+      box(title = "Park Location", status = "primary", color = "blue", solidHeader = TRUE,
+          collapsible = TRUE, leafletOutput("parkMap"), width = 12),
     ),
     column(
       4,
+      selectInput(
+        "park", "Select a park:",
+        np$Name
+      ),
       uiOutput("header"),
       textOutput("description")
     ),
@@ -64,14 +68,21 @@ ui_1 <- fluidPage(
     )
   ),
   fluidRow(
-    box(plotOutput("monthPlot"), width = 4),
-    box(plotOutput("yearPlot"), width = 4)
+    box(title = "Average Monthly Visits", status = "primary", color = "blue", solidHeader = TRUE,
+        collapsible = TRUE, plotOutput("monthPlot"), width = 4),
+    box(title = "Total Annual Visits", status = "primary", color = "blue", solidHeader = TRUE,
+        collapsible = TRUE, plotOutput("yearPlot"), width = 4)
+  ),
+  fluidRow(
+    box(title = "Interactive Biodiversity", status = "primary", color = "blue", solidHeader = TRUE,
+        collapsible = TRUE, d3tree2Output("speciesTreeMap"), width = 6),
+    box(title = "Protected Species", status = "primary", color = "blue", solidHeader = TRUE,
+        collapsible = TRUE, plotOutput("endanger"), width = 6)
   )
 )
 
 # Define UI for National Parks ----
 ui_0 <- fluidPage(
-  
   # use this in non shinydashboard app
   setBackgroundColor(color = "ghostwhite"),
   useShinydashboard(),
@@ -96,12 +107,16 @@ ui_0 <- fluidPage(
   #               max = 2017, value = c(1979, 2017))
   # ),
   fluidRow(
-    box(leafletOutput("mymap")),
-    box(plotOutput("visitsTrend"))
+    box(title = "Interactive Map", status = "primary", color = "blue", solidHeader = TRUE,
+        collapsible = TRUE, leafletOutput("mymap")),
+    box(title = "Visit Trend", status = "primary", solidHeader = TRUE,
+        collapsible = TRUE, plotOutput("visitsTrend"))
   ),
   fluidRow(
-    box(plotOutput("rankingStates")),
-    box(plotOutput("rankingVisits"))
+    box(title = "Top 5 States With More Parks", status = "primary", solidHeader = TRUE,
+        collapsible = TRUE, plotOutput("rankingStates")),
+    box(title = "Top 5 Parks With More Average Anual Visits", status = "primary", solidHeader = TRUE,
+        collapsible = TRUE, plotOutput("rankingVisits"))
   )
 )
 
@@ -128,8 +143,13 @@ server <- function(input, output) {
   output$total_visits <- renderText({ 
     format(sum(tidy_visits$Visits, na.rm = TRUE)/1000000, nsmall=1, digits = 1, big.mark=",")
   })
-  output$total_areas <- renderText({ 
-    format(sum(np$Area, na.rm = TRUE), nsmall=1, digits = 1, big.mark=",")
+  output$total_areas <- renderText({
+    x <- np %>%
+      group_by(Name) %>%
+      summarise(Area = mean(Area)) %>%
+      .$Area %>%
+      sum()
+    format(x/1000000,nsmall=1, digits = 1, big.mark=",")
   })
   output$newest <- renderText({ 
     "Acadia"
@@ -183,7 +203,7 @@ server <- function(input, output) {
   output$rankingVisits <- renderPlot({
     tidy_visits %>%
       group_by(Park) %>%
-      summarise(total.visits = sum(Visits, na.rm = TRUE)) %>%
+      summarise(total.visits = mean(Visits, na.rm = TRUE)) %>%
       arrange(desc(total.visits)) %>%
       top_n(5) %>%
       ggplot(aes(x=fct_reorder(Park, total.visits),y=total.visits)) + 
@@ -259,6 +279,26 @@ server <- function(input, output) {
       addMarkers(lng = ~Long, 
                  lat = ~Lat, 
                  popup = ~Name)
+  })
+  
+  output$speciesTreeMap <- renderD3tree2({
+    test <- species %>%
+      group_by(`Park Name`,Category, Order) %>%
+      summarise(size = n()) %>%
+      filter(`Park Name` == paste(input$park, "National Park"))
+    
+    t <- treemap(test,c("Category", "Order"), "size")
+    d3tree2( t ,  rootname = "Species Distribution" )
+  })
+  
+  output$endanger <- renderPlot({
+    species %>%
+      group_by(`Park Name`,Category, `Conservation Status`) %>%
+      summarise(size = n()) %>%
+      drop_na() %>%
+      filter(`Park Name` == paste(input$park, "National Park"), `Conservation Status` != "Under Review") %>%
+      ggplot(aes(x = `Conservation Status`, y = size, fill = Category)) +
+      geom_bar(position="stack", stat="identity")
   })
   
   ## --------------------------------------------------------------------------------------------##

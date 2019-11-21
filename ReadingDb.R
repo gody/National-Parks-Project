@@ -71,3 +71,17 @@ plot_usmap("states",
   ) + 
   labs(title = "Amount of National Parks per State") +
   theme(legend.position = "right")
+
+install.packages("treemap")
+devtools::install_github("timelyportfolio/d3treeR")
+library(treemap)
+library(d3treeR)
+species <- read_csv('data/species.csv')
+test <- species %>%
+  group_by(`Park Name`,Category, Order, Family) %>%
+  summarise(size = n()) %>%
+  filter(`Park Name` == "Acadia National Park")
+  
+t <- treemap(test,c("Category", "Order", "Family"), "size")
+inter <- d3tree2( t ,  rootname = "General" )
+
