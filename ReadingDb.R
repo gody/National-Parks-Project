@@ -77,6 +77,11 @@ devtools::install_github("timelyportfolio/d3treeR")
 library(treemap)
 library(d3treeR)
 species <- read_csv('data/species.csv')
+b <- species %>%
+  separate(col = "Park Name" , into = c("Park Name", "X"), sep = " National Park") %>%
+  subset(select = -c(X))
+write_rds(b, 'data/NP Species.rds')
+  
 test <- species %>%
   group_by(`Park Name`,Category, Order, Family) %>%
   summarise(size = n()) %>%

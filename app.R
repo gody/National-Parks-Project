@@ -3,18 +3,19 @@ library(leaflet)
 library(tidyverse)
 library(ggplot2)
 library(maps)
-library(gganimate)
 library(shinythemes)
 library(shinydashboard)
 library(shinyWidgets)
 library(raster)
 library(usmap)
 library(treemap)
+
+if("d3treeR" %in% rownames(installed.packages()) == FALSE) {devtools::install_github("timelyportfolio/d3treeR")}
 library(d3treeR)
 
 tidy_visits <- readRDS('data/NP Visits.rds')
 np <- readRDS('data/NP General Information.rds')
-species <- read_csv('data/species.csv')
+species <- readRDS('data/NP Species.rds')
 
 
 full_data <- left_join(tidy_visits, np, by=c('Park' = 'Name'))
@@ -43,15 +44,14 @@ ui_1 <- fluidPage(
     column(
       5,
       box(title = "Park Location", status = "primary", color = "blue", solidHeader = TRUE,
-          collapsible = TRUE, leafletOutput("parkMap"), width = 12),
+          collapsible = TRUE, leafletOutput("parkMap"), width = 12)
     ),
     column(
       4,
       selectInput(
-        "park", "Select a park:",
+        "park", "",
         np$Name
       ),
-      uiOutput("header"),
       textOutput("description")
     ),
     column(
@@ -285,7 +285,7 @@ server <- function(input, output) {
     test <- species %>%
       group_by(`Park Name`,Category, Order) %>%
       summarise(size = n()) %>%
-      filter(`Park Name` == paste(input$park, "National Park"))
+      filter(`Park Name` == input$park)
     
     t <- treemap(test,c("Category", "Order"), "size")
     d3tree2( t ,  rootname = "Species Distribution" )
@@ -296,7 +296,7 @@ server <- function(input, output) {
       group_by(`Park Name`,Category, `Conservation Status`) %>%
       summarise(size = n()) %>%
       drop_na() %>%
-      filter(`Park Name` == paste(input$park, "National Park"), `Conservation Status` != "Under Review") %>%
+      filter(`Park Name` == input$park, `Conservation Status` != "Under Review") %>%
       ggplot(aes(x = `Conservation Status`, y = size, fill = Category)) +
       geom_bar(position="stack", stat="identity")
   })
