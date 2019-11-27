@@ -5,10 +5,11 @@ library(ggplot2)
 library(maps)
 library(shinythemes)
 library(shinydashboard)
-library(shinyWidgets)
+library(shinyWidgets) 
 library(raster)
 library(usmap)
 library(treemap)
+library(RColorBrewer)
 
 if("d3treeR" %in% rownames(installed.packages()) == FALSE) {devtools::install_github("timelyportfolio/d3treeR")}
 library(d3treeR)
@@ -20,18 +21,26 @@ species <- readRDS('data/NP Species.rds')
 
 full_data <- left_join(tidy_visits, np, by=c('Park' = 'Name'))
 
+ui_3 = fluidPage(
+  fluidRow(
+    column(12,
+           dataTableOutput('table')
+    )
+  )
+)
+
 ui_2 <- fluidPage(
   fluidRow(
     column(
-      8,
+      10,
       box(plotOutput("chorophlets"), width = 12)
     ),
     column(
-      4,
+      2,
       radioButtons("radio", h3("Choroplet Options"),
-                   choices = list("Amount of Parks" = 1, 
-                                  "Total Area" = 2,
-                                  "Visits" = 3), selected = 1)
+                   choices = list("Amount of Parks" = "parks", 
+                                  "Total Area" = "area",
+                                  "Visits" = "visits"), selected = "parks")
     )
   )
 )
@@ -39,15 +48,9 @@ ui_2 <- fluidPage(
 ui_1 <- fluidPage(
   theme = shinytheme("cerulean"),
   includeCSS("styles.css"),
-
   fluidRow(
     column(
-      5,
-      box(title = "Park Location", status = "primary", color = "blue", solidHeader = TRUE,
-          collapsible = TRUE, leafletOutput("parkMap"), width = 12)
-    ),
-    column(
-      4,
+      3,
       selectInput(
         "park", "",
         np$Name
@@ -55,19 +58,32 @@ ui_1 <- fluidPage(
       textOutput("description")
     ),
     column(
-      3,
+      9,
+      fluidRow(),
       valueBox(
-        uiOutput("parkDate"), "Date Stablish", icon = icon("fas fa-calendar-alt"), width = 12
+        uiOutput("parkDate"), "Date Established", icon = icon("fas fa-calendar-alt"), width = 4
       ),
       valueBox(
-        uiOutput("parkArea"), "Total Area", icon = icon("fas fa-globe-americas"), width = 12
+        uiOutput("parkArea"), "Total Area (Acres)", icon = icon("fas fa-globe-americas"), width = 4
       ),
       valueBox(
-        uiOutput("parkStates"), "State(s)", icon = icon("fas fa-map-marked-alt"), width = 12
+        uiOutput("parkStates"), "State(s)", icon = icon("fas fa-map-marked-alt"), width = 4
+      ),
+      valueBox(
+        uiOutput("animals"), "Different Animals Species", icon = icon("fas fa-crow"), width = 4
+      ),
+      valueBox(
+        uiOutput("plants"), "Different Plants Species", icon = icon("fas fa-leaf"), width = 4
+      ),
+      valueBox(
+        uiOutput("endangerSpecies"), "Protected Endanger Species", icon = icon("fas fa-exclamation-triangle"), width = 4
       ),
     )
   ),
+  fluidRow(),
   fluidRow(
+    box(title = "Park Location", status = "primary", color = "blue", solidHeader = TRUE,
+        collapsible = TRUE, leafletOutput("parkMap"), width = 4),
     box(title = "Average Monthly Visits", status = "primary", color = "blue", solidHeader = TRUE,
         collapsible = TRUE, plotOutput("monthPlot"), width = 4),
     box(title = "Total Annual Visits", status = "primary", color = "blue", solidHeader = TRUE,
@@ -125,10 +141,10 @@ ui <- navbarPage(
   "National Parks Analytics",
   tabPanel("Global Analytics", ui_0),
   tabPanel("By Park", ui_1),
+  tabPanel("By State", ui_2),
   navbarMenu(
     "More",
-    tabPanel("Sub-Component A", ui_2),
-    tabPanel("Sub-Component B")
+    tabPanel("Explore the Bio Dataset", ui_3)
   )
 )
 
@@ -168,7 +184,8 @@ server <- function(input, output) {
                  lat = ~Lat, 
                  popup = ~Name,
                  weight = 1,
-                 radius = ~sqrt(total.visits)*15)
+                 radius = ~sqrt(total.visits)*15) %>%
+      setView(-95.6650, 37.600, 3.4)
   })
   
   output$visitsTrend <- renderPlot({
@@ -178,11 +195,12 @@ server <- function(input, output) {
       filter(Year < 2017) %>%
       ggplot(aes(x = Year, y = total.visits)) + 
       geom_point(size = 2) +
-      geom_line(size = 0.5) +
+      geom_line(size = 0.5, color="blue") +
       labs(y="Visitors",
            x="Year",
            title='Park Visits Trends') +
-      theme_classic()
+      theme_classic() +
+      scale_fill_brewer(palette="Blues")
   })
   
   output$rankingStates <- renderPlot({
@@ -191,13 +209,14 @@ server <- function(input, output) {
       summarise(park.count = n()) %>%
       arrange(desc(park.count)) %>%
       top_n(5) %>%
-      ggplot(aes(x=fct_reorder(State, park.count),y=park.count)) + 
+      ggplot(aes(x=fct_reorder(State, park.count),y=park.count, fill = State)) + 
       geom_bar(stat='identity') + 
       coord_flip() +
       labs(y="# of Parks",
            x="State",
            title='Top States by Amount of Parks') +
-      theme_classic()
+      theme_classic() +
+      scale_fill_brewer(palette="Blues")
   })
   
   output$rankingVisits <- renderPlot({
@@ -206,13 +225,14 @@ server <- function(input, output) {
       summarise(total.visits = mean(Visits, na.rm = TRUE)) %>%
       arrange(desc(total.visits)) %>%
       top_n(5) %>%
-      ggplot(aes(x=fct_reorder(Park, total.visits),y=total.visits)) + 
+      ggplot(aes(x=fct_reorder(Park, total.visits),y=total.visits, fill = Park)) + 
       geom_bar(stat='identity') + 
       coord_flip() +
       labs(y="# of Visitors",
            x="Park",
            title='Top Parks by Visitors') +
-      theme_classic()
+      theme_classic() +
+      scale_fill_brewer(palette="Blues")
   })
   ## --------------------------------------------------------------------------------------------##
   
@@ -248,6 +268,28 @@ server <- function(input, output) {
       .$State
     toString(x3)
   })
+  output$animals <- renderText({ 
+    x1 <- species %>%
+      filter(`Park Name` == input$park, Category %in% c("Mammal", "Bird", "Reptile", "Amphibian", "Fish",
+                                                      "Spider/Scorpion", "Insect", "Invertebrate", 
+                                                      "Crab/Lobster/Shrimp", "Slug/Snail" )) %>%
+      group_by(Category) %>%
+      summarise(size = n()) 
+    toString(sum(x1$size))
+  })
+  output$plants <- renderText({ 
+    x2 <- species %>%
+      filter(`Park Name` == input$park, Category %in% c("Vascular Plant", "Fungi", "Nanovascular Plant", "Algae")) %>%
+      group_by(Category) %>%
+      summarise(size = n()) 
+    toString(sum(x2$size))
+  })
+  output$endangerSpecies <- renderText({ 
+    x3 <- species %>%
+      filter(`Park Name` == input$park, `Conservation Status` == "Endangered") %>%
+      count()
+    toString(x3)
+  })
   
   output$monthPlot <- renderPlot({
     tidy_visits %>%
@@ -256,8 +298,10 @@ server <- function(input, output) {
       filter(Park == input$park) %>%
       ggplot(aes(x = Month, y = total.visits, group = 1)) +
       geom_point(size = 2) +
-      geom_line(size = 0.5) +
-      scale_x_discrete(limits = toupper(month.abb))
+      geom_line(size = 0.5, color="blue") +
+      scale_x_discrete(limits = toupper(month.abb)) +
+      theme_classic() +
+      scale_fill_brewer(palette="Blues")
   })
   
   output$yearPlot <- renderPlot({
@@ -267,7 +311,9 @@ server <- function(input, output) {
       filter(Park == input$park) %>%
       ggplot(aes(x = Year, y = total.visits, group = 1)) +
       geom_point(size = 2) +
-      geom_line(size = 0.5)
+      geom_line(size = 0.5, color="blue") +
+      theme_classic() +
+      scale_fill_brewer(palette="Blues")
   })
   
   output$parkMap <- renderLeaflet({
@@ -278,7 +324,9 @@ server <- function(input, output) {
       addTiles() %>%
       addMarkers(lng = ~Long, 
                  lat = ~Lat, 
-                 popup = ~Name)
+                 popup = ~Name) %>%
+      setView(map_data$Long, map_data$Lat,10)
+      
   })
   
   output$speciesTreeMap <- renderD3tree2({
@@ -287,7 +335,7 @@ server <- function(input, output) {
       summarise(size = n()) %>%
       filter(`Park Name` == input$park)
     
-    t <- treemap(test,c("Category", "Order"), "size")
+    t <- treemap(test,c("Category", "Order"), "size", palette="Blues")
     d3tree2( t ,  rootname = "Species Distribution" )
   })
   
@@ -297,28 +345,42 @@ server <- function(input, output) {
       summarise(size = n()) %>%
       drop_na() %>%
       filter(`Park Name` == input$park, `Conservation Status` != "Under Review") %>%
-      ggplot(aes(x = `Conservation Status`, y = size, fill = Category)) +
-      geom_bar(position="stack", stat="identity")
+      ggplot(aes(x = Category, y = size, fill = `Conservation Status`)) +
+      geom_bar(position="stack", stat="identity") + 
+      scale_fill_brewer(palette="YlOrRd") +
+      theme_minimal()
   })
   
   ## --------------------------------------------------------------------------------------------##
 
   output$chorophlets <- renderPlot({
-    #selected <- switch(input$radio,"parks", "area", "visits")
+    
+    visit <- tidy_visits %>%
+      group_by(Park) %>%
+      summarise(avg.visits = mean(Visits))
     
     test <- np %>%
+      left_join(visit, by = c("Name" = "Park")) %>%
+      drop_na() %>%
       group_by(state) %>%
-      summarize(parks = n())
+      summarize(parks = n(), area = log(sum(Area)), visits = sum(avg.visits))
+    
     
     plot_usmap("states",
-               data = test, values = "parks", color = "dark green"
-    ) + 
-      scale_fill_continuous(
-        low = "green", high = "dark green", name = "Number of Parks", label = scales::comma
-      ) + 
+               data = test, values = input$radio, color = "white") + 
       labs(title = "Amount of National Parks per State") +
       theme(legend.position = "right")
   })
+  
+  ## --------------------------------------------------------------------------------------------##
+  
+  output$table <- renderDataTable({
+    species %>%
+      filter(`Park Name` == input$park) %>%
+      subset(select = -c(`Species ID`,X14))
+      },
+    options = list(pageLength = 50)
+  )
   
 }
 
